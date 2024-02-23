@@ -3,7 +3,9 @@
 import sys
 import json
 import requests
+import inquirer
 from requests.auth import HTTPBasicAuth
+import argparse
 
 # Global Variables
 DEBUG = False
@@ -13,11 +15,24 @@ def LogMessage(msgType, msgText):
     if msgType == "debug" and DEBUG == True:
         print("[{color}DEBUG{clear}] {text}".format(color=termcolors.Cyan, clear=termcolors.End, text=msgText))
     if msgType == "error":
-        print("[{color}DEBUG{clear}] {text}".format(color=termcolors.Red, clear=termcolors.End, text=msgText))
+        print("[{color}ERROR{clear}] {text}".format(color=termcolors.Red, clear=termcolors.End, text=msgText))
     elif msgType == "warning":
-        print("[{color}DEBUG{clear}] {text}".format(color=termcolors.Yellow, clear=termcolors.End, text=msgText))
+        print("[{color}WARNING{clear}] {text}".format(color=termcolors.Yellow, clear=termcolors.End, text=msgText))
     elif msgType == "info":
-        print("[{color}DEBUG{clear}] {text}".format(color=termcolors.Blue, clear=termcolors.End, text=msgText))
+        print("[{color}INFO{clear}] {text}".format(color=termcolors.Blue, clear=termcolors.End, text=msgText))
+    elif msgType == "success":
+        print("[{color}SUCCESS{clear}] {text}".format(color=termcolors.Green, clear=termcolors.End, text=msgText))
+
+def PromptSelectFromList(promptText, optionList):
+    questions = [
+        inquirer.List(
+            "response",
+            message=promptText,
+            choices=optionList,
+        )
+    ]
+    answers = inquirer.prompt(questions)["response"]
+    return answers
 
 class termcolors:
     Blue = '\033[94m'
@@ -32,6 +47,7 @@ class AwxAPI:
         self.loadConfig()
         self._connection = AwxConnection(self.Protocol, self.APIHost, self.Port, self.APIVersion, self.HTTPAuth)
         self.GetBaseInventories()
+        self.Hostname = None
 
     def loadConfig(self):
         global DEBUG
@@ -51,6 +67,15 @@ class AwxAPI:
     
     def get_connection(self):
         return self._connection
+
+    def CreateHostInInventory(self, hostname, inventoryname):
+        LogMessage("info", "Creating host {host} in inventory {inventory}.".format(host=hostname, inventory=inventoryname))
+
+    def GetNonSmartInventoryNames(self):
+        retval = list()
+        for inventory in self.NonSmartInventories:
+            retval.append(inventory["name"])
+        return retval
 
     def GetBaseInventories(self):
         self.Connection.Endpoint = '/inventories'
@@ -109,6 +134,48 @@ class AwxConnection:
     Endpoint: {endpoint}'''.format(baseUrl=self.BaseURL, endpoint=self.Endpoint)
 
 if __name__ == '__main__':
-    API = AwxAPI()
-    API.Connection.Endpoint = '/'        
+    validActions = ['create', 'update', 'delete']
+    # Parse arguments
+    argParser = argparse.ArgumentParser()
+    argParser.add_argument('-n', '--name', help='Name of a host to perform an action on.', action="store")
+    argParser.add_argument('-i', '--inventory', help='Name of an inventory to perform an action on.', action="store")
+    argParser.add_argument('-a', '--action', help='Type of action to perform. Options are [create|update|delete].', action="store")
+    args = argParser.parse_args()
     
+    # Check arguments
+    if args.action == None or args.action not in validActions:
+        print('Plese specify a valid action. Options are: {options}'.format(options=validActions))
+        exit(1)
+
+    # Spawn the API class and handle initialization of members
+    API = AwxAPI()
+    API.Connection.Endpoint = '/'
+
+    if args.action in ['create', 'update', 'delete']:    
+        # These actions require a hostname
+        if args.name == None or args.name == '':
+            print('Hostname is required for the specified action ({action}).'.format(action=args.action))
+            exit(1)
+
+        if args.action == 'create':
+            if args.inventory != None:
+                if args.inventory in [ inventory['name'] for inventory in API.NonSmartInventories ]:
+                    LogMessage("debug", "Action is create and valid inventory name was specified in the command.")
+                    API.CreateHostInInventory(args.name, args.inventory)
+                else:
+                    LogMessage("debug", "Action is create and no valid inventory was specified in the command. Prompting for selection.")
+                    inventory = PromptSelectFromList("Select an inventory to create this host in:", [ inventory['name'] for inventory in API.NonSmartInventories ])
+                    API.CreateHostInInventory(args.name, inventory)
+            else:
+                LogMessage("debug", "Action is create and no valid inventory was specified in the command. Prompting for selection.")
+                inventory = PromptSelectFromList("Select an inventory to create this host in:", [ inventory['name'] for inventory in API.NonSmartInventories ])
+                API.CreateHostInInventory(args.name, inventory)
+
+        
+
+    
+
+
+#Example code:
+#Present a select question with a list of regular inventories from awx
+#print("Answer was {answer}".format(answer=PromptSelectFromList("Select an inventory", [ inventory['name'] for inventory in API.NonSmartInventories ])))

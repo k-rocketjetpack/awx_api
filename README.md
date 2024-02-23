@@ -5,6 +5,19 @@ This is a Python3 client for the [Ansible AWX](https://github.com/ansible/awx) R
 There are many features of the AWX Operator that are no longer supported through awx-manage, such as bulk addition of hosts to inventories. I do not need a fully functional REST API that is difficult to configure and use. I hope to provide a simple tool to handle a limited subset of API capabilities through a simple CLI.
 
 ## Installation
+### Step 0: Prereqs
+This utility relies on the following Python libraries:  
+- sys  
+- json
+- requests
+- inquirer
+
+A virtual environment can be created that contains all of these with the following proceedure:  
+`python3 -m venv awx_venv`  
+`. awx_venv/bin/activate`  
+`pip3 install --upgrade pip`
+`pip3 install -r requirements.txt`
+
 ### Step 1: Clone this repository
 ### Step 2: Create config.json file with contents:
 {
